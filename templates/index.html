@@ -2,23 +2,187 @@
 
 {% block content %}
 <section class="hero">
-    <h1>欢迎来到我的网站</h1>
-    <p>这是一个使用 Flask + HTML/CSS 构建的基础网站</p>
-    <button class="btn">了解更多</button>
+    <h1>📈 股票分析工具</h1>
+    <p>輸入股票代號，查看最近一個月的收盤價趨勢</p>
 </section>
 
-<section class="features">
-    <div class="feature-card">
-        <h3>简洁</h3>
-        <p>清晰的代码结构和简单的布局</p>
+<section class="stock-section">
+    <div class="search-box">
+        <div class="input-group">
+            <input 
+                type="text" 
+                id="stockSymbol" 
+                class="stock-input" 
+                placeholder="輸入股票代號（例如：2330.TW、AAPL）"
+                autocomplete="off"
+            >
+            <button id="searchBtn" class="btn btn-search">查詢</button>
+        </div>
+        <p class="help-text">💡 提示：台股代號格式為「XXXX.TW」（如 2330.TW），美股直接輸入代號（如 AAPL）</p>
     </div>
-    <div class="feature-card">
-        <h3>快速</h3>
-        <p>轻量级框架，快速响应</p>
+
+    <div id="loadingSpinner" class="loading hidden">
+        <div class="spinner"></div>
+        <p>正在加載數據...</p>
     </div>
-    <div class="feature-card">
-        <h3>易扩展</h3>
-        <p>方便添加新的功能和页面</p>
+
+    <div id="errorMessage" class="error-message hidden"></div>
+
+    <div id="chartContainer" class="chart-container hidden">
+        <h2 id="chartTitle"></h2>
+        <canvas id="stockChart"></canvas>
+        <div class="chart-info">
+            <p>📊 最近30天收盤價數據 | 
+            <span id="dataRange"></span></p>
+        </div>
     </div>
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let chart = null;
+
+const stockInput = document.getElementById('stockSymbol');
+const searchBtn = document.getElementById('searchBtn');
+const loadingSpinner = document.getElementById('loadingSpinner');
+const errorMessage = document.getElementById('errorMessage');
+const chartContainer = document.getElementById('chartContainer');
+const chartTitle = document.getElementById('chartTitle');
+const dataRange = document.getElementById('dataRange');
+const chartCanvas = document.getElementById('stockChart');
+
+// 允許按 Enter 鍵搜尋
+stockInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        searchStock();
+    }
+});
+
+// 點擊搜尋按鈕
+searchBtn.addEventListener('click', searchStock);
+
+async function searchStock() {
+    const symbol = stockInput.value.trim();
+    
+    if (!symbol) {
+        showError('請輸入股票代號');
+        return;
+    }
+
+    showLoading(true);
+    errorMessage.classList.add('hidden');
+    chartContainer.classList.add('hidden');
+
+    try {
+        const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || '無法獲取股票數據');
+        }
+
+        const data = await response.json();
+        displayChart(data);
+        showLoading(false);
+
+    } catch (error) {
+        showError(`❌ ${error.message}`);
+        showLoading(false);
+    }
+}
+
+function displayChart(data) {
+    chartTitle.textContent = `${data.symbol} - 最近30天收盤價`;
+    dataRange.textContent = `${data.date_range.start} 至 ${data.date_range.end}`;
+
+    const ctx = chartCanvas.getContext('2d');
+    
+    // 銷毀舊圖表
+    if (chart) {
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.dates,
+            datasets: [{
+                label: '收盤價',
+                data: data.closing_prices,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#667eea',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: '#764ba2'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        font: { size: 14 },
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 13 },
+                    borderColor: '#667eea',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function(context) {
+                            return '收盤價: ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: '價格'
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    });
+
+    chartContainer.classList.remove('hidden');
+}
+
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+}
+
+function showLoading(show) {
+    if (show) {
+        loadingSpinner.classList.remove('hidden');
+    } else {
+        loadingSpinner.classList.add('hidden');
+    }
+}
+</script>
 {% endblock %}
+
