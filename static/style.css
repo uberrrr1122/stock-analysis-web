@@ -197,21 +197,56 @@ main {
     display: none;
 }
 
+.chart-header {
+    margin-bottom: 1.5rem;
+}
+
 .chart-container h2 {
     color: #667eea;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
     font-size: 1.5rem;
 }
 
-.chart-container canvas {
-    max-height: 400px;
+.chart-range {
+    color: #666;
+    font-size: 0.95rem;
 }
 
-.chart-info {
-    text-align: center;
-    margin-top: 1rem;
+#candleChart {
+    width: 100%;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     font-size: 0.95rem;
-    color: #666;
+    color: #333;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+}
+
+.legend-color.up {
+    background-color: #FF0000;
+}
+
+.legend-color.down {
+    background-color: #008000;
 }
 
 /* Features Section */

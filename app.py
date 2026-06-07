@@ -38,11 +38,21 @@ def get_stock_data():
                 'error': f'找不到股票代号: {ticker}'
             }), 404
         
+        candles = []
+        for date, row in hist.iterrows():
+            candle = {
+                'time': date.strftime('%Y-%m-%d'),
+                'open': round(float(row['Open']), 2),
+                'high': round(float(row['High']), 2),
+                'low': round(float(row['Low']), 2),
+                'close': round(float(row['Close']), 2)
+            }
+            candles.append(candle)
+        
         data = {
             'symbol': ticker,
-            'dates': hist.index.strftime('%Y-%m-%d').tolist(),
-            'closing_prices': hist['Close'].round(2).tolist(),
-            'data_points': len(hist),
+            'candles': candles,
+            'data_points': len(candles),
             'date_range': {
                 'start': start_date.strftime('%Y-%m-%d'),
                 'end': end_date.strftime('%Y-%m-%d')

@@ -2,8 +2,8 @@
 
 {% block content %}
 <section class="hero">
-    <h1>📈 股票分析工具</h1>
-    <p>輸入股票代號，查看最近一個月的收盤價趨勢</p>
+    <h1>📈 股票 K 線分析</h1>
+    <p>查看最近一個月的開高低收數據，輕鬆掌握股價趨勢</p>
 </section>
 
 <section class="stock-section">
@@ -29,16 +29,27 @@
     <div id="errorMessage" class="error-message hidden"></div>
 
     <div id="chartContainer" class="chart-container hidden">
-        <h2 id="chartTitle"></h2>
-        <canvas id="stockChart"></canvas>
-        <div class="chart-info">
-            <p>📊 最近30天收盤價數據 | 
-            <span id="dataRange"></span></p>
+        <div class="chart-header">
+            <h2 id="chartTitle"></h2>
+            <p id="dataRange" class="chart-range"></p>
+        </div>
+        <div id="candleChart"></div>
+        <div class="chart-legend">
+            <span class="legend-item">
+                <span class="legend-color up"></span>
+                <span class="legend-text">上漲（紅）</span>
+            </span>
+            <span class="legend-item">
+                <span class="legend-color down"></span>
+                <span class="legend-text">下跌（綠）</span>
+            </span>
         </div>
     </div>
 </section>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- ApexCharts CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.45.0/apexcharts.min.js"></script>
+
 <script>
 let chart = null;
 
@@ -49,7 +60,6 @@ const errorMessage = document.getElementById('errorMessage');
 const chartContainer = document.getElementById('chartContainer');
 const chartTitle = document.getElementById('chartTitle');
 const dataRange = document.getElementById('dataRange');
-const chartCanvas = document.getElementById('stockChart');
 
 // 允許按 Enter 鍵搜尋
 stockInput.addEventListener('keypress', (e) => {
@@ -82,7 +92,7 @@ async function searchStock() {
         }
 
         const data = await response.json();
-        displayChart(data);
+        displayCandleChart(data);
         showLoading(false);
 
     } catch (error) {
@@ -91,83 +101,137 @@ async function searchStock() {
     }
 }
 
-function displayChart(data) {
-    chartTitle.textContent = `${data.symbol} - 最近30天收盤價`;
-    dataRange.textContent = `${data.date_range.start} 至 ${data.date_range.end}`;
+function displayCandleChart(data) {
+    chartTitle.textContent = `${data.symbol} - K 線圖`;
+    dataRange.textContent = `📅 ${data.date_range.start} 至 ${data.date_range.end}`;
 
-    const ctx = chartCanvas.getContext('2d');
-    
+    // 轉換數據格式供 ApexCharts 使用
+    const seriesData = data.candles.map(candle => ({
+        x: new Date(candle.time),
+        y: [
+            parseFloat(candle.open),
+            parseFloat(candle.high),
+            parseFloat(candle.low),
+            parseFloat(candle.close)
+        ]
+    }));
+
+    const options = {
+        series: [{
+            data: seriesData
+        }],
+        chart: {
+            type: 'candlestick',
+            height: 400,
+            toolbar: {
+                show: true,
+                tools: {
+                    download: true,
+                    selection: true,
+                    zoom: true,
+                    zoomin: true,
+                    zoomout: true,
+                    pan: true,
+                    reset: true
+                }
+            },
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        },
+        plotOptions: {
+            candlestick: {
+                colors: {
+                    upward: '#FF0000',    // 台灣股市：上漲為紅色
+                    downward: '#008000'   // 台灣股市：下跌為綠色
+                }
+            }
+        },
+        xaxis: {
+            type: 'datetime',
+            labels: {
+                format: 'yyyy-MM-dd',
+                style: {
+                    colors: '#666',
+                    fontSize: '12px'
+                }
+            }
+        },
+        yaxis: {
+            title: {
+                text: '價格',
+                style: {
+                    color: '#333',
+                    fontSize: '14px',
+                    fontWeight: 600
+                }
+            },
+            labels: {
+                formatter: function(value) {
+                    return value.toFixed(2);
+                },
+                style: {
+                    colors: '#666',
+                    fontSize: '12px'
+                }
+            },
+            tooltip: {
+                enabled: true
+            }
+        },
+        tooltip: {
+            enabled: true,
+            theme: 'dark',
+            x: {
+                format: 'yyyy-MM-dd'
+            },
+            y: {
+                formatter: function(value) {
+                    if (value) {
+                        return value.toFixed(2);
+                    }
+                    return value;
+                }
+            },
+            custom: function({ seriesIndex, dataPointIndex, w }) {
+                const candle = data.candles[dataPointIndex];
+                return `
+                    <div style="padding: 10px; font-size: 13px;">
+                        <p><strong>${candle.time}</strong></p>
+                        <p>開：${candle.open}</p>
+                        <p>高：${candle.high}</p>
+                        <p>低：${candle.low}</p>
+                        <p style="color: ${candle.close >= candle.open ? '#FF0000' : '#008000'}; font-weight: bold;">
+                            收：${candle.close}
+                        </p>
+                    </div>
+                `;
+            }
+        },
+        grid: {
+            borderColor: '#e0e0e0',
+            strokeDashArray: 3,
+            xaxis: {
+                lines: {
+                    show: false
+                }
+            }
+        },
+        stroke: {
+            width: 1,
+            colors: ['#666']
+        }
+    };
+
     // 銷毀舊圖表
     if (chart) {
         chart.destroy();
     }
 
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.dates,
-            datasets: [{
-                label: '收盤價',
-                data: data.closing_prices,
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointBackgroundColor: '#667eea',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointHoverRadius: 6,
-                pointHoverBackgroundColor: '#764ba2'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        font: { size: 14 },
-                        padding: 15,
-                        usePointStyle: true
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: { size: 14 },
-                    bodyFont: { size: 13 },
-                    borderColor: '#667eea',
-                    borderWidth: 1,
-                    callbacks: {
-                        label: function(context) {
-                            return '收盤價: ' + context.parsed.y.toFixed(2);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    title: {
-                        display: true,
-                        text: '價格'
-                    },
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                }
-            }
-        }
-    });
-
+    chart = new ApexCharts(
+        document.querySelector('#candleChart'),
+        options
+    );
+    
+    chart.render();
     chartContainer.classList.remove('hidden');
 }
 
@@ -185,4 +249,5 @@ function showLoading(show) {
 }
 </script>
 {% endblock %}
+
 
