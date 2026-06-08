@@ -249,6 +249,11 @@ main {
     background-color: #008000;
 }
 
+.legend-line {
+    width: 20px;
+    height: 0;
+}
+
 /* Features Section */
 .features {
     display: grid;
