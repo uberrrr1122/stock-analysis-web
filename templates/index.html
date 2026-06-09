@@ -28,12 +28,15 @@
 
     <div id="errorMessage" class="error-message hidden"></div>
 
+    <!-- K 線圖區塊 -->
     <div id="chartContainer" class="chart-container hidden">
         <div class="chart-header">
             <h2 id="chartTitle"></h2>
             <p id="dataRange" class="chart-range"></p>
         </div>
         <div id="candleChart"></div>
+
+        <!-- 基本面卡片 -->
         <div class="stock-cards-grid">
             <div class="info-card">
                 <div class="card-icon">💰</div>
@@ -42,7 +45,6 @@
                     <span id="cardEPS" class="card-value">--</span>
                 </div>
             </div>
-
             <div class="info-card">
                 <div class="card-icon">🚀</div>
                 <div class="card-content">
@@ -51,6 +53,8 @@
                 </div>
             </div>
         </div>
+
+        <!-- 圖例 -->
         <div class="chart-legend">
             <span class="legend-item">
                 <span class="legend-color up"></span>
@@ -74,6 +78,28 @@
             </span>
         </div>
     </div>
+
+    <!-- 籌碼面區塊 -->
+    <div id="institutionalContainer" class="chart-container hidden" style="margin-top:2rem;">
+        <div class="chart-header">
+            <h2 style="color:#667eea;">📊 三大法人買賣超（近30交易日）</h2>
+        </div>
+        <div id="institutionalChart"></div>
+        <div style="overflow-x:auto; margin-top:1.5rem;">
+            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                <thead>
+                    <tr style="background:#f0f4ff;">
+                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">日期</th>
+                        <th style="padding:10px; border:1px solid #ddd; text-align:center; color:#e74c3c;">外資（張）</th>
+                        <th style="padding:10px; border:1px solid #ddd; text-align:center; color:#2980b9;">投信（張）</th>
+                        <th style="padding:10px; border:1px solid #ddd; text-align:center; color:#8e44ad;">自營商（張）</th>
+                    </tr>
+                </thead>
+                <tbody id="institutionalTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
 </section>
 
 <!-- ApexCharts CDN -->
@@ -83,43 +109,34 @@
 let chart = null;
 
 const stockInput = document.getElementById('stockSymbol');
-const searchBtn = document.getElementById('searchBtn');
-const loadingSpinner = document.getElementById('loadingSpinner');
-const errorMessage = document.getElementById('errorMessage');
-const chartContainer = document.getElementById('chartContainer');
-const chartTitle = document.getElementById('chartTitle');
-const dataRange = document.getElementById('dataRange');
+const searchBtn  = document.getElementById('searchBtn');
+const loadingSpinner  = document.getElementById('loadingSpinner');
+const errorMessage    = document.getElementById('errorMessage');
+const chartContainer  = document.getElementById('chartContainer');
+const chartTitle      = document.getElementById('chartTitle');
+const dataRange       = document.getElementById('dataRange');
 
-stockInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') searchStock();
-});
-
+stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchStock(); });
 searchBtn.addEventListener('click', searchStock);
 
 async function searchStock() {
     const symbol = stockInput.value.trim();
-
-    if (!symbol) {
-        showError('請輸入股票代號');
-        return;
-    }
+    if (!symbol) { showError('請輸入股票代號'); return; }
 
     showLoading(true);
     errorMessage.classList.add('hidden');
     chartContainer.classList.add('hidden');
+    document.getElementById('institutionalContainer').classList.add('hidden');
 
     try {
         const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
-
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || '無法獲取股票數據');
+            const errData = await response.json();
+            throw new Error(errData.error || '無法獲取股票數據');
         }
-
         const data = await response.json();
         displayCandleChart(data);
         showLoading(false);
-
     } catch (error) {
         showError(`❌ ${error.message}`);
         showLoading(false);
@@ -128,55 +145,38 @@ async function searchStock() {
 
 function displayCandleChart(data) {
     chartTitle.textContent = `${data.symbol} - K 線圖與移動平均線`;
-    // 💡 灌入基本面卡片數據
-    const epsId = document.getElementById('cardEPS');
-    const growthId = document.getElementById('cardEPSGrowth');
-    
-    if (epsId && growthId) {
-        // 填入 EPS
-        epsId.textContent = `$${data.eps.toFixed(2)}`;
-        
-        // 填入年增率，並根據正負號判斷顏色
+
+    // 基本面卡片
+    const epsEl    = document.getElementById('cardEPS');
+    const growthEl = document.getElementById('cardEPSGrowth');
+    if (epsEl && growthEl) {
+        epsEl.textContent = `$${data.eps.toFixed(2)}`;
         if (data.eps_growth > 0) {
-            growthId.textContent = `+${data.eps_growth.toFixed(2)}%`;
-            growthId.style.color = '#FF0000'; // 正數顯示紅色（台股上漲）
+            growthEl.textContent = `+${data.eps_growth.toFixed(2)}%`;
+            growthEl.style.color = '#FF0000';
         } else if (data.eps_growth < 0) {
-            growthId.textContent = `${data.eps_growth.toFixed(2)}%`;
-            growthId.style.color = '#008000'; // 負數顯示綠色（台股下跌）
+            growthEl.textContent = `${data.eps_growth.toFixed(2)}%`;
+            growthEl.style.color = '#008000';
         } else {
-            growthId.textContent = `0.00%`;
-            growthId.style.color = '#666';
+            growthEl.textContent = '0.00%';
+            growthEl.style.color = '#666';
         }
     }
 
     const firstCandle = data.candles[0];
-    const lastCandle = data.candles[data.candles.length - 1];
+    const lastCandle  = data.candles[data.candles.length - 1];
     dataRange.textContent = `📅 ${firstCandle.time} 至 ${lastCandle.time}`;
 
     const minDate = new Date(firstCandle.time).getTime();
     const maxDate = new Date(lastCandle.time).getTime();
 
-    const candleSeriesData = data.candles.map(candle => ({
-        x: new Date(candle.time),
-        y: [
-            parseFloat(candle.open),
-            parseFloat(candle.high),
-            parseFloat(candle.low),
-            parseFloat(candle.close)
-        ]
+    const candleSeriesData = data.candles.map(c => ({
+        x: new Date(c.time),
+        y: [parseFloat(c.open), parseFloat(c.high), parseFloat(c.low), parseFloat(c.close)]
     }));
-
-    const ma5Data = data.candles
-        .filter(candle => candle.ma5 !== null)
-        .map(candle => ({ x: new Date(candle.time), y: candle.ma5 }));
-
-    const ma20Data = data.candles
-        .filter(candle => candle.ma20 !== null)
-        .map(candle => ({ x: new Date(candle.time), y: candle.ma20 }));
-
-    const ma60Data = data.candles
-        .filter(candle => candle.ma60 !== null)
-        .map(candle => ({ x: new Date(candle.time), y: candle.ma60 }));
+    const ma5Data  = data.candles.filter(c => c.ma5  !== null).map(c => ({ x: new Date(c.time), y: c.ma5 }));
+    const ma20Data = data.candles.filter(c => c.ma20 !== null).map(c => ({ x: new Date(c.time), y: c.ma20 }));
+    const ma60Data = data.candles.filter(c => c.ma60 !== null).map(c => ({ x: new Date(c.time), y: c.ma60 }));
 
     const options = {
         series: [
@@ -188,225 +188,130 @@ function displayCandleChart(data) {
         chart: {
             type: 'candlestick',
             height: 500,
-            toolbar: {
-                show: true,
-                tools: {
-                    download: true,
-                    selection: true,
-                    zoom: true,
-                    zoomin: true,
-                    zoomout: true,
-                    pan: true,
-                    reset: true
-                }
-            },
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+            // ... 其他設定
         },
-        plotOptions: {
-            candlestick: {
-                colors: {
-                    upward: '#FF0000',
-                    downward: '#008000'
-                }
-            }
+        crosshairs: {
+            show: true,
+            position: 'back',
+            stroke: { color: '#999', width: 1, dashArray: 3 }
         },
+        plotOptions: { candlestick: { colors: { upward: '#FF0000', downward: '#008000' } } },
         xaxis: {
-            type: 'datetime',
-            min: minDate,
-            max: maxDate,
-            labels: {
-                format: 'yyyy-MM-dd',
-                style: { colors: '#666', fontSize: '12px' }
-            }
+            type: 'datetime', min: minDate, max: maxDate,
+            labels: { format: 'yyyy-MM-dd', style: { colors: '#666', fontSize: '12px' } }
         },
         yaxis: {
-            title: {
-                text: '價格',
-                style: { color: '#333', fontSize: '14px', fontWeight: 600 }
-            },
-            labels: {
-                formatter: function(value) { return value.toFixed(2); },
-                style: { colors: '#666', fontSize: '12px' }
-            },
+            title: { text: '價格', style: { color: '#333', fontSize: '14px', fontWeight: 600 } },
+            labels: { formatter: v => v.toFixed(2), style: { colors: '#666', fontSize: '12px' } },
             tooltip: { enabled: true }
         },
         tooltip: {
-                    enabled: true,       // 保持開啟
-                    theme: 'dark',
-                    shared: false,      // ❌ 關閉複數共用（這就是錯位的元兇！）
-                    intersect: true,    // 🎯 關鍵：滑鼠必須「精準碰到」K線，才會觸發（死角控制）
-                    custom: function({ seriesIndex, dataPointIndex, w }) {
-                        // ❌ 這裡面完全不回傳任何黑框網頁（客製化黑框徹底消失！）
-                        return ''; 
-                    },
-                    x: {
-                        show: true,     // 🗓️ 滑鼠移到哪，最下方就只顯示那一天的日期
-                        format: 'yyyy-MM-dd'
-                    },
-                    y: {
-                        title: {
-                            formatter: () => '' // 價格軸旁邊不留廢話
-                        }
-                    }
-                },
-                // 👇 在 chart 設定裡確保十字準心是打開的，這樣滑鼠移到死角時，軸線上會有精準的對齊線
-                crosshairs: {
-                    show: true,
-                    type: 'cross', // 十字準心模式
-                    stroke: {
-                        color: '#b6b6b6',
-                        width: 1,
-                        dashArray: 3
-                    }
-                },
-        grid: {
-            borderColor: '#e0e0e0',
-            strokeDashArray: 3,
-            xaxis: { lines: { show: false } }
+            enabled: true,
+            theme: 'dark',
+            shared: true,
+            intersect: false,
+            x: { format: 'yyyy-MM-dd' },
+            custom: function() { return ''; }
         },
-        stroke: {
-            width: [1, 2, 2, 2],
-            colors: ['#666', '#1f77d2', '#ff7c0b', '#9c27b0']
-        },
-        legend: {
-            position: 'top',
-            horizontalAlign: 'left',
-            labels: { useSeriesColors: true }
-        }
+        grid: { borderColor: '#e0e0e0', strokeDashArray: 3, xaxis: { lines: { show: false } } },
+        stroke: { width: [1, 2, 2, 2], colors: ['#666', '#1f77d2', '#ff7c0b', '#9c27b0'] },
+        legend: { position: 'top', horizontalAlign: 'left', labels: { useSeriesColors: true } }
     };
 
-    if (chart) {
-        chart.destroy();
-    }
-
+    if (chart) chart.destroy();
     chart = new ApexCharts(document.querySelector('#candleChart'), options);
     chart.render();
 
+
+
+    const chartEl = document.querySelector('#candleChart');
+
+
     // 滾輪縮放
-// 1. 滾輪縮放功能（保持本來完美能動的狀態）
-    const chartElement = document.querySelector('#candleChart');
-    chartElement.addEventListener('wheel', (e) => {
+    chartEl.addEventListener('wheel', (e) => {
         if (e.target.closest('#candleChart')) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.deltaY < 0) {
-                setTimeout(() => chart.zoomIn(), 50);
-            } else {
-                setTimeout(() => chart.zoomOut(), 50);
-            }
+            e.preventDefault(); e.stopPropagation();
+            if (e.deltaY < 0) setTimeout(() => chart.zoomIn(), 50);
+            else setTimeout(() => chart.zoomOut(), 50);
         }
     }, { passive: false, capture: true });
-
     document.addEventListener('wheel', (e) => {
-        if (e.target.closest('#candleChart')) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+        if (e.target.closest('#candleChart')) { e.preventDefault(); e.stopPropagation(); }
     }, { passive: false, capture: true });
 
-    // 2. 🔥 復活關鍵：把大容器顯示出來（就是這行，之前被我搞丟了！）
     chartContainer.classList.remove('hidden');
 
-    // 3. 🧲 強力磁吸死角控制：滑鼠只要在圖表內，就自動強迫吸附到最近的 K 線
-    chartElement.addEventListener('mousemove', (e) => {
-        if (!chart || !chart.w || !chart.w.globals.seriesX[0]) return;
+    // 載入籌碼面
+    fetchInstitutional(data.symbol);
+}
 
-        const gridElement = document.querySelector('.apexcharts-grid');
-        if (!gridElement) return;
+// ── 籌碼面 ──────────────────────────────────
 
-        const gridRect = gridElement.getBoundingClientRect();
-        const mouseX = e.clientX - gridRect.left;
-
-        if (mouseX < 0 || mouseX > gridRect.width) return;
-
-        const minX = chart.w.globals.minX;
-        const maxX = chart.w.globals.maxX;
-        const timePerPixel = (maxX - minX) / gridRect.width;
-        const targetTime = minX + (mouseX * timePerPixel);
-
-        const timestamps = chart.w.globals.seriesX[0];
-        let closestIndex = 0;
-        let minDiff = Infinity;
-
-        for (let i = 0; i < timestamps.length; i++) {
-            const diff = Math.abs(timestamps[i] - targetTime);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestIndex = i;
-            }
+async function fetchInstitutional(symbol) {
+    try {
+        const res  = await fetch(`/api/institutional?symbol=${encodeURIComponent(symbol)}`);
+        const json = await res.json();
+        if (!res.ok || json.error) {
+            document.getElementById('institutionalContainer').classList.add('hidden');
+            return;
         }
+        renderInstitutional(json.data);
+    } catch (e) {
+        document.getElementById('institutionalContainer').classList.add('hidden');
+    }
+}
 
-        // 強制發動 ApexCharts 內建準心吸附
-        if (chart.w.globals.customTooltip && typeof chart.w.globals.customTooltip.showTooltip === 'function') {
-            chart.w.globals.customTooltip.showTooltip(closestIndex);
-        }
+function renderInstitutional(records) {
+    document.getElementById('institutionalContainer').classList.remove('hidden');
+
+    const dates   = records.map(r => r.date);
+    const foreign = records.map(r => r.foreign);
+    const trust   = records.map(r => r.trust);
+    const dealer  = records.map(r => r.dealer);
+
+    if (window.instChart) window.instChart.destroy();
+    window.instChart = new ApexCharts(document.querySelector('#institutionalChart'), {
+        series: [
+            { name: '外資',  data: foreign },
+            { name: '投信',  data: trust },
+            { name: '自營商', data: dealer }
+        ],
+        chart: { type: 'bar', height: 350, toolbar: { show: false } },
+        plotOptions: { bar: { columnWidth: '60%', grouped: true } },
+        colors: ['#e74c3c', '#2980b9', '#8e44ad'],
+        xaxis: { categories: dates, labels: { rotate: -45, style: { fontSize: '11px' } } },
+        yaxis: { title: { text: '買賣超（張）' }, labels: { formatter: v => v.toLocaleString() } },
+        tooltip: { y: { formatter: v => v.toLocaleString() + ' 張' } },
+        legend: { position: 'top' }
     });
+    window.instChart.render();
 
-    // 當滑鼠離開時，準心收起來不留殘影
-    chartElement.addEventListener('mouseleave', () => {
-        if (chart && chart.w && chart.w.globals.customTooltip && typeof chart.w.globals.customTooltip.hideTooltip === 'function') {
-            chart.w.globals.customTooltip.hideTooltip();
-        }
+    // 填表格（最新在上）
+    const tbody = document.getElementById('institutionalTableBody');
+    tbody.innerHTML = '';
+    [...records].reverse().forEach(r => {
+        const fc = r.foreign >= 0 ? '#c0392b' : '#27ae60';
+        const tc = r.trust   >= 0 ? '#c0392b' : '#27ae60';
+        const dc = r.dealer  >= 0 ? '#c0392b' : '#27ae60';
+        tbody.innerHTML += `
+            <tr style="text-align:center;">
+                <td style="padding:8px; border:1px solid #ddd;">${r.date}</td>
+                <td style="padding:8px; border:1px solid #ddd; color:${fc}; font-weight:600;">${r.foreign.toLocaleString()}</td>
+                <td style="padding:8px; border:1px solid #ddd; color:${tc}; font-weight:600;">${r.trust.toLocaleString()}</td>
+                <td style="padding:8px; border:1px solid #ddd; color:${dc}; font-weight:600;">${r.dealer.toLocaleString()}</td>
+            </tr>`;
     });
 }
-// 🧲 強力磁吸死角控制：滑鼠只要在圖表內，就自動吸附到最近的 K 線
-    chartElement.addEventListener('mousemove', (e) => {
-        if (!chart || !chart.w || !chart.w.globals.seriesX[0]) return;
 
-        // 1. 取得圖表繪圖區的邊界與滑鼠的相對位置
-        const gridRect = document.querySelector('.apexcharts-grid').getBoundingClientRect();
-        const mouseX = e.clientX - gridRect.left;
-
-        // 如果滑鼠滑出圖表繪圖區，就不處理
-        if (mouseX < 0 || mouseX > gridRect.width) return;
-
-        // 2. 將滑鼠的網頁像素位置，轉換成圖表真正的時間戳記（X軸數值）
-        const minX = chart.w.globals.minX;
-        const maxX = chart.w.globals.maxX;
-        const timePerPixel = (maxX - minX) / gridRect.width;
-        const targetTime = minX + (mouseX * timePerPixel);
-
-        // 3. 從資料庫中找出「時間離滑鼠最近」的那一根 K 線
-        const timestamps = chart.w.globals.seriesX[0];
-        let closestIndex = 0;
-        let minDiff = Infinity;
-
-        for (let i = 0; i < timestamps.length; i++) {
-            const diff = Math.abs(timestamps[i] - targetTime);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestIndex = i;
-            }
-        }
-
-        // 4. 🔥 磁力發動！強迫 ApexCharts 的十字準心直接移動到那一根 K 線的定點上
-        chart.w.globals.customTooltip.showTooltip(closestIndex);
-        
-        // 同步更新底部的 X 軸十字線標籤
-        const markers = chart.w.globals.markers;
-        if (markers && markers.setX) {
-            markers.setX(closestIndex);
-        }
-    });
-
-    // 當滑鼠完全離開圖表範圍時，自動隱藏準心，不留殘影
-    chartElement.addEventListener('mouseleave', () => {
-        if (chart && chart.w && chart.w.globals.customTooltip) {
-            chart.w.globals.customTooltip.hideTooltip();
-        }
-    });
+// ── 工具函數 ──────────────────────────────────
 
 function showError(message) {
     errorMessage.textContent = message;
     errorMessage.classList.remove('hidden');
 }
-
 function showLoading(show) {
-    if (show) {
-        loadingSpinner.classList.remove('hidden');
-    } else {
-        loadingSpinner.classList.add('hidden');
-    }
+    if (show) loadingSpinner.classList.remove('hidden');
+    else loadingSpinner.classList.add('hidden');
 }
 </script>
 {% endblock %}
