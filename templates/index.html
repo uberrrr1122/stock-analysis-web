@@ -8,15 +8,22 @@
 
 <section class="stock-section">
     <div class="search-box">
-        <div class="input-group">
+        <div class="input-group" style="position:relative;">
             <input 
                 type="text" 
                 id="stockSymbol" 
                 class="stock-input" 
-                placeholder="輸入股票代號（例如：2330.TW、AAPL）"
+                placeholder="輸入股票代號或名稱（例如：台積電、2330、AAPL）"
                 autocomplete="off"
             >
             <button id="searchBtn" class="btn btn-search">查詢</button>
+            <!-- 下拉選單 -->
+            <ul id="autocompleteList" style="
+                display:none; position:absolute; top:100%; left:0;
+                width:calc(100% - 110px); background:white; border:1px solid #ddd;
+                border-top:none; border-radius:0 0 6px 6px; list-style:none;
+                margin:0; padding:0; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.1);
+            "></ul>
         </div>
         <p class="help-text">💡 提示：台股代號格式為「XXXX.TW」（如 2330.TW），美股直接輸入代號（如 AAPL）</p>
     </div>
@@ -108,16 +115,76 @@
 <script>
 let chart = null;
 
-const stockInput = document.getElementById('stockSymbol');
-const searchBtn  = document.getElementById('searchBtn');
-const loadingSpinner  = document.getElementById('loadingSpinner');
-const errorMessage    = document.getElementById('errorMessage');
-const chartContainer  = document.getElementById('chartContainer');
-const chartTitle      = document.getElementById('chartTitle');
-const dataRange       = document.getElementById('dataRange');
+const stockInput   = document.getElementById('stockSymbol');
+const searchBtn    = document.getElementById('searchBtn');
+const loadingSpinner    = document.getElementById('loadingSpinner');
+const errorMessage      = document.getElementById('errorMessage');
+const chartContainer    = document.getElementById('chartContainer');
+const chartTitle        = document.getElementById('chartTitle');
+const dataRange         = document.getElementById('dataRange');
+const autocompleteList  = document.getElementById('autocompleteList');
 
-stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchStock(); });
-searchBtn.addEventListener('click', searchStock);
+// ── 自動完成 ──────────────────────────────────────────
+
+let autocompleteTimer = null;
+
+stockInput.addEventListener('input', () => {
+    clearTimeout(autocompleteTimer);
+    const q = stockInput.value.trim();
+    if (!q) { hideAutocomplete(); return; }
+
+    autocompleteTimer = setTimeout(async () => {
+        try {
+            const res  = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+            const list = await res.json();
+            renderAutocomplete(list);
+        } catch (e) {
+            hideAutocomplete();
+        }
+    }, 200);  // 輸入停頓 200ms 後才查詢，避免頻繁請求
+});
+
+function renderAutocomplete(items) {
+    autocompleteList.innerHTML = '';
+    if (!items.length) { hideAutocomplete(); return; }
+
+    items.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item.display;
+        li.style.cssText = `
+            padding: 10px 14px; cursor: pointer; font-size: 14px;
+            border-bottom: 1px solid #f0f0f0; color: #333;
+        `;
+        li.addEventListener('mouseenter', () => li.style.background = '#f0f4ff');
+        li.addEventListener('mouseleave', () => li.style.background = 'white');
+        li.addEventListener('click', () => {
+            stockInput.value = item.symbol;
+            hideAutocomplete();
+            searchStock();
+        });
+        autocompleteList.appendChild(li);
+    });
+
+    autocompleteList.style.display = 'block';
+}
+
+function hideAutocomplete() {
+    autocompleteList.style.display = 'none';
+    autocompleteList.innerHTML = '';
+}
+
+// 點擊其他地方關閉下拉
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.input-group')) hideAutocomplete();
+});
+
+// Enter 鍵 / 按鈕
+stockInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') { hideAutocomplete(); searchStock(); }
+});
+searchBtn.addEventListener('click', () => { hideAutocomplete(); searchStock(); });
+
+// ── 查詢股票 ──────────────────────────────────────────
 
 async function searchStock() {
     const symbol = stockInput.value.trim();
@@ -143,10 +210,11 @@ async function searchStock() {
     }
 }
 
+// ── K 線圖 ──────────────────────────────────────────
+
 function displayCandleChart(data) {
     chartTitle.textContent = `${data.symbol} - K 線圖與移動平均線`;
 
-    // 基本面卡片
     const epsEl    = document.getElementById('cardEPS');
     const growthEl = document.getElementById('cardEPSGrowth');
     if (epsEl && growthEl) {
@@ -186,14 +254,9 @@ function displayCandleChart(data) {
             { name: 'MA60', type: 'line', data: ma60Data, color: '#9c27b0' }
         ],
         chart: {
-            type: 'candlestick',
-            height: 500,
-            // ... 其他設定
-        },
-        crosshairs: {
-            show: true,
-            position: 'back',
-            stroke: { color: '#999', width: 1, dashArray: 3 }
+            type: 'candlestick', height: 500,
+            toolbar: { show: true, tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
         },
         plotOptions: { candlestick: { colors: { upward: '#FF0000', downward: '#008000' } } },
         xaxis: {
@@ -222,12 +285,8 @@ function displayCandleChart(data) {
     chart = new ApexCharts(document.querySelector('#candleChart'), options);
     chart.render();
 
-
-
-    const chartEl = document.querySelector('#candleChart');
-
-
     // 滾輪縮放
+    const chartEl = document.querySelector('#candleChart');
     chartEl.addEventListener('wheel', (e) => {
         if (e.target.closest('#candleChart')) {
             e.preventDefault(); e.stopPropagation();
@@ -240,12 +299,10 @@ function displayCandleChart(data) {
     }, { passive: false, capture: true });
 
     chartContainer.classList.remove('hidden');
-
-    // 載入籌碼面
     fetchInstitutional(data.symbol);
 }
 
-// ── 籌碼面 ──────────────────────────────────
+// ── 籌碼面 ──────────────────────────────────────────
 
 async function fetchInstitutional(symbol) {
     try {
@@ -282,15 +339,14 @@ function renderInstitutional(records) {
         xaxis: { categories: dates, labels: { rotate: -45, style: { fontSize: '11px' } } },
         yaxis: { title: { text: '買賣超（張）' }, labels: { formatter: v => v.toLocaleString() } },
         tooltip: {
-        shared: true,
-        intersect: false,
-        y: { formatter: v => v.toLocaleString() + ' 張' }
-},
+            shared: true,
+            intersect: false,
+            y: { formatter: v => v.toLocaleString() + ' 張' }
+        },
         legend: { position: 'top' }
     });
     window.instChart.render();
 
-    // 填表格（最新在上）
     const tbody = document.getElementById('institutionalTableBody');
     tbody.innerHTML = '';
     [...records].reverse().forEach(r => {
@@ -307,7 +363,7 @@ function renderInstitutional(records) {
     });
 }
 
-// ── 工具函數 ──────────────────────────────────
+// ── 工具函數 ──────────────────────────────────────────
 
 function showError(message) {
     errorMessage.textContent = message;
