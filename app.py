@@ -169,14 +169,17 @@ def get_institutional_data():
             'Foreign_Investor': 'foreign',
             'Investment_Trust': 'trust',
             'Dealer_self':      'dealer',
-            'Dealer_Hedging':   'dealer'   # 自營商兩個都加到 dealer
+            'Dealer_Hedging':   'dealer'
         }
+
+        # 各欄位的單位換算（外資是股，要除1000；投信和自營商已經是張）
         unit_map = {
             'Foreign_Investor': 1000,
             'Investment_Trust': 1000,
             'Dealer_self':      1000,
             'Dealer_Hedging':   1000
         }
+
         result = {}
         for eng, key in name_map.items():
             sub = df[df['name'] == eng][['date', 'buy', 'sell']].copy()
@@ -187,7 +190,7 @@ def get_institutional_data():
                 if d not in result:
                     result[d] = {'date': d, 'foreign': 0, 'trust': 0, 'dealer': 0}
                 divisor = unit_map.get(eng, 1)
-                result[d][key] += int(row['net'] // 1000)
+                result[d][key] += int(row['net'] // divisor)
 
         records = sorted(result.values(), key=lambda x: x['date'])
 

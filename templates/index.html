@@ -281,7 +281,11 @@ function renderInstitutional(records) {
         colors: ['#e74c3c', '#2980b9', '#8e44ad'],
         xaxis: { categories: dates, labels: { rotate: -45, style: { fontSize: '11px' } } },
         yaxis: { title: { text: '買賣超（張）' }, labels: { formatter: v => v.toLocaleString() } },
-        tooltip: { y: { formatter: v => v.toLocaleString() + ' 張' } },
+        tooltip: {
+        shared: true,
+        intersect: false,
+        y: { formatter: v => v.toLocaleString() + ' 張' }
+},
         legend: { position: 'top' }
     });
     window.instChart.render();
