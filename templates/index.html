@@ -34,6 +34,23 @@
             <p id="dataRange" class="chart-range"></p>
         </div>
         <div id="candleChart"></div>
+        <div class="stock-cards-grid">
+            <div class="info-card">
+                <div class="card-icon">💰</div>
+                <div class="card-content">
+                    <span class="card-label">每股盈餘 (Trailing EPS)</span>
+                    <span id="cardEPS" class="card-value">--</span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <div class="card-icon">🚀</div>
+                <div class="card-content">
+                    <span class="card-label">EPS 年增率 (YoY)</span>
+                    <span id="cardEPSGrowth" class="card-value">--</span>
+                </div>
+            </div>
+        </div>
         <div class="chart-legend">
             <span class="legend-item">
                 <span class="legend-color up"></span>
@@ -111,6 +128,26 @@ async function searchStock() {
 
 function displayCandleChart(data) {
     chartTitle.textContent = `${data.symbol} - K 線圖與移動平均線`;
+    // 💡 灌入基本面卡片數據
+    const epsId = document.getElementById('cardEPS');
+    const growthId = document.getElementById('cardEPSGrowth');
+    
+    if (epsId && growthId) {
+        // 填入 EPS
+        epsId.textContent = `$${data.eps.toFixed(2)}`;
+        
+        // 填入年增率，並根據正負號判斷顏色
+        if (data.eps_growth > 0) {
+            growthId.textContent = `+${data.eps_growth.toFixed(2)}%`;
+            growthId.style.color = '#FF0000'; // 正數顯示紅色（台股上漲）
+        } else if (data.eps_growth < 0) {
+            growthId.textContent = `${data.eps_growth.toFixed(2)}%`;
+            growthId.style.color = '#008000'; // 負數顯示綠色（台股下跌）
+        } else {
+            growthId.textContent = `0.00%`;
+            growthId.style.color = '#666';
+        }
+    }
 
     const firstCandle = data.candles[0];
     const lastCandle = data.candles[data.candles.length - 1];

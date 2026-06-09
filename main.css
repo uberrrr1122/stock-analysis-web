@@ -1,0 +1,50 @@
+/* 📊 股票數據卡片排版 */
+.stock-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-top: 25px;
+    padding: 0 10px;
+}
+
+.info-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.card-icon {
+    font-size: 32px;
+    margin-right: 15px;
+    background: #f8fafc;
+    padding: 10px;
+    border-radius: 10px;
+}
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-label {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.card-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e293b;
+}
