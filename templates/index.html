@@ -17,7 +17,6 @@
                 autocomplete="off"
             >
             <button id="searchBtn" class="btn btn-search">查詢</button>
-            <!-- 下拉選單 -->
             <ul id="autocompleteList" style="
                 display:none; position:absolute; top:100%; left:0;
                 width:calc(100% - 110px); background:white; border:1px solid #ddd;
@@ -107,6 +106,31 @@
         </div>
     </div>
 
+    <!-- AI 分析區塊 -->
+    <div id="aiContainer" class="chart-container hidden" style="margin-top:2rem;">
+        <div class="chart-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 style="color:#667eea;">🤖 AI 智能分析</h2>
+            <button id="aiAnalysisBtn" class="btn" style="background:#667eea;">
+                🤖 開始 AI 分析
+            </button>
+        </div>
+
+        <div id="aiLoading" style="display:none; text-align:center; padding:2rem;">
+            <div class="spinner"></div>
+            <p style="margin-top:1rem; color:#666;">AI 分析中，請稍候...</p>
+        </div>
+
+        <div id="aiResult" style="display:none;
+            background:#f8faff; border-radius:8px; padding:1.5rem;
+            border-left:4px solid #667eea; margin-top:1rem;
+            font-size:15px; line-height:2; white-space:pre-wrap; color:#333;">
+        </div>
+
+        <p style="margin-top:1rem; font-size:12px; color:#999;">
+            ⚠️ AI 分析僅供參考，不構成投資建議。投資有風險，請自行判斷。
+        </p>
+    </div>
+
 </section>
 
 <!-- ApexCharts CDN -->
@@ -114,9 +138,11 @@
 
 <script>
 let chart = null;
+let currentStockData = null;       // 儲存 K 線資料供 AI 使用
+let currentInstitutional = [];     // 儲存籌碼資料供 AI 使用
 
-const stockInput   = document.getElementById('stockSymbol');
-const searchBtn    = document.getElementById('searchBtn');
+const stockInput        = document.getElementById('stockSymbol');
+const searchBtn         = document.getElementById('searchBtn');
 const loadingSpinner    = document.getElementById('loadingSpinner');
 const errorMessage      = document.getElementById('errorMessage');
 const chartContainer    = document.getElementById('chartContainer');
@@ -141,7 +167,7 @@ stockInput.addEventListener('input', () => {
         } catch (e) {
             hideAutocomplete();
         }
-    }, 200);  // 輸入停頓 200ms 後才查詢，避免頻繁請求
+    }, 200);
 });
 
 function renderAutocomplete(items) {
@@ -164,7 +190,6 @@ function renderAutocomplete(items) {
         });
         autocompleteList.appendChild(li);
     });
-
     autocompleteList.style.display = 'block';
 }
 
@@ -173,12 +198,10 @@ function hideAutocomplete() {
     autocompleteList.innerHTML = '';
 }
 
-// 點擊其他地方關閉下拉
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.input-group')) hideAutocomplete();
 });
 
-// Enter 鍵 / 按鈕
 stockInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') { hideAutocomplete(); searchStock(); }
 });
@@ -194,6 +217,8 @@ async function searchStock() {
     errorMessage.classList.add('hidden');
     chartContainer.classList.add('hidden');
     document.getElementById('institutionalContainer').classList.add('hidden');
+    document.getElementById('aiContainer').classList.add('hidden');
+    document.getElementById('aiResult').style.display = 'none';
 
     try {
         const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
@@ -202,6 +227,7 @@ async function searchStock() {
             throw new Error(errData.error || '無法獲取股票數據');
         }
         const data = await response.json();
+        currentStockData = data;
         displayCandleChart(data);
         showLoading(false);
     } catch (error) {
@@ -269,10 +295,7 @@ function displayCandleChart(data) {
             tooltip: { enabled: true }
         },
         tooltip: {
-            enabled: true,
-            theme: 'dark',
-            shared: true,
-            intersect: false,
+            enabled: true, theme: 'dark', shared: true, intersect: false,
             x: { format: 'yyyy-MM-dd' },
             custom: function() { return ''; }
         },
@@ -285,7 +308,6 @@ function displayCandleChart(data) {
     chart = new ApexCharts(document.querySelector('#candleChart'), options);
     chart.render();
 
-    // 滾輪縮放
     const chartEl = document.querySelector('#candleChart');
     chartEl.addEventListener('wheel', (e) => {
         if (e.target.closest('#candleChart')) {
@@ -310,12 +332,17 @@ async function fetchInstitutional(symbol) {
         const json = await res.json();
         if (!res.ok || json.error) {
             document.getElementById('institutionalContainer').classList.add('hidden');
-            return;
+            currentInstitutional = [];
+        } else {
+            currentInstitutional = json.data;
+            renderInstitutional(json.data);
         }
-        renderInstitutional(json.data);
     } catch (e) {
         document.getElementById('institutionalContainer').classList.add('hidden');
+        currentInstitutional = [];
     }
+    // 籌碼面載入完成後才顯示 AI 按鈕
+    document.getElementById('aiContainer').classList.remove('hidden');
 }
 
 function renderInstitutional(records) {
@@ -338,11 +365,7 @@ function renderInstitutional(records) {
         colors: ['#e74c3c', '#2980b9', '#8e44ad'],
         xaxis: { categories: dates, labels: { rotate: -45, style: { fontSize: '11px' } } },
         yaxis: { title: { text: '買賣超（張）' }, labels: { formatter: v => v.toLocaleString() } },
-        tooltip: {
-            shared: true,
-            intersect: false,
-            y: { formatter: v => v.toLocaleString() + ' 張' }
-        },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => v.toLocaleString() + ' 張' } },
         legend: { position: 'top' }
     });
     window.instChart.render();
@@ -362,6 +385,55 @@ function renderInstitutional(records) {
             </tr>`;
     });
 }
+
+// ── AI 分析 ──────────────────────────────────────────
+
+document.getElementById('aiAnalysisBtn').addEventListener('click', async () => {
+    if (!currentStockData) return;
+
+    const btn       = document.getElementById('aiAnalysisBtn');
+    const loading   = document.getElementById('aiLoading');
+    const resultEl  = document.getElementById('aiResult');
+
+    btn.disabled = true;
+    btn.textContent = '分析中...';
+    loading.style.display = 'block';
+    resultEl.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/ai-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol:        currentStockData.symbol,
+                candles:       currentStockData.candles,
+                eps:           currentStockData.eps,
+                eps_growth:    currentStockData.eps_growth,
+                institutional: currentInstitutional
+            })
+        });
+
+        const json = await res.json();
+        loading.style.display = 'none';
+
+        if (!res.ok || json.error) {
+            resultEl.textContent = `❌ ${json.error}`;
+            resultEl.style.color = '#c0392b';
+        } else {
+            resultEl.textContent = json.analysis;
+            resultEl.style.color = '#333';
+        }
+        resultEl.style.display = 'block';
+
+    } catch (e) {
+        loading.style.display = 'none';
+        resultEl.textContent = '❌ 網路錯誤，請稍後再試';
+        resultEl.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🤖 重新分析';
+});
 
 // ── 工具函數 ──────────────────────────────────────────
 

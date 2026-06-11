@@ -5,6 +5,8 @@ import yfinance as yf
 import pandas as pd
 import requests
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -297,6 +299,86 @@ def get_institutional_data():
 
     except Exception as e:
         return jsonify({'error': f'發生錯誤: {str(e)}'}), 500
+
+
+@app.route('/api/ai-analysis', methods=['POST'])
+def ai_analysis():
+    try:
+        body = request.get_json()
+        symbol   = body.get('symbol', '')
+        candles  = body.get('candles', [])
+        eps      = body.get('eps', 0)
+        eps_growth = body.get('eps_growth', 0)
+        institutional = body.get('institutional', [])
+
+        if not candles:
+            return jsonify({'error': '缺少K線資料'}), 400
+
+        # 整理最近 10 筆 K 線
+        recent = candles[-10:]
+        latest = candles[-1]
+        price_change = round(latest['close'] - candles[-6]['close'], 2) if len(candles) >= 6 else 0
+        price_change_pct = round(price_change / candles[-6]['close'] * 100, 2) if len(candles) >= 6 else 0
+
+        # 均線多空判斷
+        ma_status = '無法判斷'
+        if latest.get('ma5') and latest.get('ma20') and latest.get('ma60'):
+            if latest['ma5'] > latest['ma20'] > latest['ma60']:
+                ma_status = '多頭排列（MA5 > MA20 > MA60，趨勢向上）'
+            elif latest['ma5'] < latest['ma20'] < latest['ma60']:
+                ma_status = '空頭排列（MA5 < MA20 < MA60，趨勢向下）'
+            else:
+                ma_status = '均線糾結（趨勢不明朗）'
+
+        # 籌碼面摘要（最近 5 天）
+        inst_summary = '無籌碼資料'
+        if institutional:
+            recent_inst = institutional[-5:]
+            foreign_total = sum(r['foreign'] for r in recent_inst)
+            trust_total   = sum(r['trust']   for r in recent_inst)
+            dealer_total  = sum(r['dealer']  for r in recent_inst)
+            inst_summary = f"近5日外資合計：{foreign_total:,} 張，投信：{trust_total:,} 張，自營商：{dealer_total:,} 張"
+
+        # 組成給 Gemini 的 prompt
+        prompt = f"""你是一位股票分析師，請用繁體中文、白話文幫新手分析以下股票資料，語氣親切易懂。
+
+股票代號：{symbol}
+最新收盤價：{latest['close']}
+近5日漲跌：{price_change_pct}%
+均線狀況：{ma_status}
+EPS（近四季合計）：{eps}
+EPS年增率：{eps_growth}%
+籌碼面（{inst_summary}）
+
+請依照以下格式回答：
+1. 📊 技術面分析（均線、趨勢，2-3句）
+2. 💰 基本面分析（EPS好不好，2句）
+3. 🏦 籌碼面分析（主力動向，2句，若無資料請說明）
+4. 🎯 新手建議（現在適不適合進場，給一個明確建議，並提醒投資有風險）
+
+請直接開始分析，不要有開場白。"""
+
+        # 呼叫 Gemini API
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            return jsonify({'error': 'GEMINI_API_KEY 未設定'}), 500
+
+        res = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}",
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=30
+        )
+
+        if res.status_code != 200:
+            return jsonify({'error': f'Gemini API 錯誤: {res.status_code}'}), 500
+
+        result = res.json()
+        analysis = result['candidates'][0]['content']['parts'][0]['text']
+
+        return jsonify({'analysis': analysis}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'AI 分析失敗: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
