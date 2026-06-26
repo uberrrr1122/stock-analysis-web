@@ -352,6 +352,8 @@ function displayCandleChart(data) {
             chart.zoomX(minX, maxX);
         }
     }, { passive: false, capture: true });
+    chartContainer.classList.remove('hidden');
+    fetchInstitutional(data.symbol);
 }
 
 // ── 籌碼面 ──────────────────────────────────────────
