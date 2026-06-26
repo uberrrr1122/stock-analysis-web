@@ -310,18 +310,48 @@ function displayCandleChart(data) {
 
     const chartEl = document.querySelector('#candleChart');
     chartEl.addEventListener('wheel', (e) => {
+        if (!chart || !chart.w || !chart.w.globals) return;
+        
         if (e.target.closest('#candleChart')) {
-            e.preventDefault(); e.stopPropagation();
-            if (e.deltaY < 0) setTimeout(() => chart.zoomIn(), 50);
-            else setTimeout(() => chart.zoomOut(), 50);
+            e.preventDefault(); 
+            e.stopPropagation();
+
+            // 1. 取得當前的 X 軸範圍 (時間戳記)
+            let minX = chart.w.globals.minX;
+            let maxX = chart.w.globals.maxX;
+            
+            // 2. 取得原始資料的邊界，避免縮小到超出總資料範圍
+            let initialMinX = chart.w.globals.initialminX;
+            let initialMaxX = chart.w.globals.initialmaxX;
+
+            // 3. 計算當前顯示的區間大小
+            let range = maxX - minX;
+            
+            // 4. 設定縮放倍率 (此處設定每次滾動縮放 10%)
+            let zoomFactor = 0.10; 
+            let diff = range * zoomFactor;
+
+            if (e.deltaY < 0) {
+                // 滾輪往上：放大 (Zoom In)，範圍縮小
+                minX += diff;
+                maxX -= diff;
+                
+                // 防止過度放大導致圖表破版 (限制最少顯示約 5 天的資料)
+                if (maxX - minX < 5 * 24 * 60 * 60 * 1000) return; 
+            } else {
+                // 滾輪往下：縮小 (Zoom Out)，範圍變大
+                minX -= diff;
+                maxX += diff;
+                
+                // 防止過度縮小超出歷史數據邊界
+                if (minX < initialMinX) minX = initialMinX;
+                if (maxX > initialMaxX) maxX = initialMaxX;
+            }
+
+            // 5. 呼叫原生的 zoomX 執行縮放
+            chart.zoomX(minX, maxX);
         }
     }, { passive: false, capture: true });
-    document.addEventListener('wheel', (e) => {
-        if (e.target.closest('#candleChart')) { e.preventDefault(); e.stopPropagation(); }
-    }, { passive: false, capture: true });
-
-    chartContainer.classList.remove('hidden');
-    fetchInstitutional(data.symbol);
 }
 
 // ── 籌碼面 ──────────────────────────────────────────
